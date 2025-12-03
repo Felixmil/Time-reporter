@@ -102,7 +102,7 @@ export function GroupList({
         const nonArchivedGroups = groups.filter(g => !g.archived);
         const groupsWithEntriesInMonth = nonArchivedGroups.map(group => ({
             ...group,
-            logs: filterLogsByMonth(group.logs)
+            logs: filterLogsByMonth(group.logs).sort((a, b) => new Date(a.start) - new Date(b.start))
         }));
 
         // Show all non-archived groups, even if they have no entries in the selected month
@@ -114,7 +114,7 @@ export function GroupList({
         const archivedGroups = groups.filter(g => g.archived);
         const archivedGroupsWithFilteredEntries = archivedGroups.map(group => ({
             ...group,
-            logs: filterLogsByMonth(group.logs)
+            logs: filterLogsByMonth(group.logs).sort((a, b) => new Date(a.start) - new Date(b.start))
         }));
 
         // Show all archived groups, even if they have no entries in the selected month
