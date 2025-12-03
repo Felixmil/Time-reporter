@@ -40,6 +40,51 @@ export function GroupList({
     const getOriginalGroupIndex = (activeGroup) => {
         return groups.findIndex(g => g.name === activeGroup.name);
     };
+
+    // Helper function to get the original log index in the unfiltered logs array
+    const getOriginalLogIndex = (group, filteredLogIndex) => {
+        const originalGroupIndex = getOriginalGroupIndex(group);
+        if (originalGroupIndex === -1) {
+            console.error('Group not found in getOriginalLogIndex');
+            return -1;
+        }
+
+        const originalGroup = groups[originalGroupIndex];
+        const filteredLog = group.logs[filteredLogIndex];
+
+        if (!filteredLog) {
+            console.error('Filtered log not found at index:', filteredLogIndex);
+            return -1;
+        }
+
+        // Since filtered logs are references to the original log objects (filter doesn't create new objects),
+        // we can try to match by object reference first, then fall back to property matching
+        // Find the log in the original array - try reference match first, then property match
+        let originalIndex = originalGroup.logs.findIndex(log => log === filteredLog);
+
+        // If reference match fails (shouldn't happen, but just in case), fall back to property matching
+        if (originalIndex === -1) {
+            originalIndex = originalGroup.logs.findIndex(log =>
+                log.start === filteredLog.start &&
+                log.end === filteredLog.end &&
+                log.duration === filteredLog.duration
+            );
+        }
+
+        if (originalIndex === -1) {
+            console.error('Log not found in original array:', {
+                filteredLog,
+                originalLogs: originalGroup.logs,
+                filteredLogIndex,
+                originalGroupIndex,
+                filteredLogStart: filteredLog.start,
+                filteredLogEnd: filteredLog.end
+            });
+        }
+
+        return originalIndex;
+    };
+
     const [archivedOpen, setArchivedOpen] = useState(false);
     const [collapsedGroups, setCollapsedGroups] = useState(new Set());
 
@@ -96,7 +141,8 @@ export function GroupList({
         const today = new Date();
         const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month - 1;
         const defaultDate = isCurrentMonth ? today.toISOString().split('T')[0] : `${year}-${String(month).padStart(2, '0')}-01`;
-        setManualForm({ date: defaultDate, start: '', end: '' });
+        // Default times to round hours (minutes = 00)
+        setManualForm({ date: defaultDate, start: '09:00', end: '17:00' });
     };
 
     const closeManualForm = () => {
@@ -151,8 +197,8 @@ export function GroupList({
         setEditingLog({ groupIdx, logIdx });
         setEditForm({
             date: startDate.toISOString().split('T')[0],
-            start: startDate.toTimeString().slice(0, 5),
-            end: endDate.toTimeString().slice(0, 5)
+            start: startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+            end: endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
         });
     };
 
@@ -419,7 +465,8 @@ export function GroupList({
                 // Time logs
                 !collapsedGroups.has(g.name) && g.logs.length > 0 && React.createElement('ul', { className: 'log-list' },
                     g.logs.map((log, i) => {
-                        if (editingLog && editingLog.groupIdx === getOriginalGroupIndex(g) && editingLog.logIdx === i) {
+                        const originalLogIndex = getOriginalLogIndex(g, i);
+                        if (editingLog && editingLog.groupIdx === getOriginalGroupIndex(g) && editingLog.logIdx === originalLogIndex) {
                             return React.createElement('li', { key: `edit-${i}`, className: 'log-item indented' },
                                 React.createElement('form', {
                                     onSubmit: submitLogEdit,
@@ -476,13 +523,21 @@ export function GroupList({
                             React.createElement('button', {
                                 className: 'log-action-btn edit-log-btn',
                                 title: 'Edit entry',
-                                onClick: () => openEditForm(getOriginalGroupIndex(g), i),
+                                onClick: () => {
+                                    if (originalLogIndex !== -1) {
+                                        openEditForm(getOriginalGroupIndex(g), originalLogIndex);
+                                    }
+                                },
                                 style: { marginLeft: '8px' }
                             }, '✎'),
                             React.createElement('button', {
                                 className: 'log-action-btn delete-log-btn',
                                 title: 'Delete entry',
-                                onClick: () => onDeleteEntry(getOriginalGroupIndex(g), i)
+                                onClick: () => {
+                                    if (originalLogIndex !== -1) {
+                                        onDeleteEntry(getOriginalGroupIndex(g), originalLogIndex);
+                                    }
+                                }
                             }, '\u00D7')
                         );
                     })
